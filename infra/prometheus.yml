@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: miniserve
+    static_configs:
+      - targets:
+          - "prefill:8001"
+          - "decode:8002"
+          - "gateway:8000"
+        labels:
+          stack: disagg
+      - targets: ["monolithic:8010"]
+        labels:
+          stack: monolithic
+    metrics_path: /metrics

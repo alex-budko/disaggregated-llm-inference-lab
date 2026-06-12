@@ -1,0 +1,60 @@
+name: miniserve
+
+x-env: &default-env
+  MODEL_NAME: ${MODEL_NAME:-HuggingFaceTB/SmolLM2-135M-Instruct}
+  DEVICE: cpu
+  PYTHONUNBUFFERED: "1"
+
+services:
+  # -------- Disaggregated topology --------
+  prefill:
+    build: .
+    command: python -m miniserve.prefill_server
+    environment:
+      <<: *default-env
+      PORT: "8001"
+    ports: ["8001:8001"]
+    volumes: ["hf-cache:/cache/huggingface"]
+
+  decode:
+    build: .
+    command: python -m miniserve.decode_server
+    environment:
+      <<: *default-env
+      PORT: "8002"
+    ports: ["8002:8002"]
+    volumes: ["hf-cache:/cache/huggingface"]
+
+  gateway:
+    build: .
+    command: python -m miniserve.gateway
+    environment:
+      <<: *default-env
+      PORT: "8000"
+      PREFILL_URL: http://prefill:8001
+      DECODE_URL: http://decode:8002
+    ports: ["8000:8000"]
+    depends_on:
+      - prefill
+      - decode
+
+  # -------- Monolithic baseline (separate port) --------
+  monolithic:
+    build: .
+    command: python -m miniserve.monolithic_server
+    environment:
+      <<: *default-env
+      PORT: "8010"
+    ports: ["8010:8010"]
+    volumes: ["hf-cache:/cache/huggingface"]
+    profiles: ["mono"]   # Only starts when you do `docker compose --profile mono up`
+
+  # -------- Observability --------
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+
+volumes:
+  hf-cache:
